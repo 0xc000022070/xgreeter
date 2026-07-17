@@ -1,0 +1,49 @@
+# 0xc000022070's greeter config. Every key is optional; unset keys keep the
+# built-in defaults. Point the binary at it with `greeter --config PATH`.
+# Relative *_path values resolve against this file's directory.
+
+# argv (NOT a shell string) greetd execs as the session after auth succeeds.
+session_cmd = ["start-hyprland"]
+
+# Prefilled username. Empty string starts the caret on the USER field.
+default_user = "0xc000022070"
+
+# Text on the status bar before a username is typed.
+brand = "0xc000022070"
+
+# argv whose stdout streams into the SYSTEM INIT footer. Must be an argv array.
+# The greeter user needs journal read access for this default (see README).
+log_cmd = ["journalctl", "-b", "-n", "40", "-f", "-o", "cat"]
+
+# Show the "TAB switch · ENTER authenticate" hint while idle. Auth status and
+# failure messages always show regardless of this.
+show_help = true
+
+# Background art behind the login box. Plain ASCII is tinted with colors.art;
+# raw ANSI escape codes (e.g. a fastfetch logo) keep their own colors.
+# Provide inline OR via file (art_path wins). Omit both for no art.
+# art = """
+#   your
+#   ascii
+# """
+# art_path = "logo.ans"
+
+# Optional blurb under the status bar (like a disclaimer). Inline or via file.
+# Omit for nothing.
+# disclaimer = "This system is a work of fiction. Any resemblance ... coincidental."
+# disclaimer_path = "disclaimer.txt"
+
+# Named base palette: "amber" (default) | "blue" | "green" | "mono".
+accent = "amber"
+
+# Override any individual color with a hex value (#rrggbb). Each key is optional
+# and layers over the accent preset above.
+[colors]
+# accent           = "#ffb000"   # status bar + focused borders
+# on_accent        = "#0a0a0a"   # text on the status bar
+# foreground       = "#e6e0d6"   # typed text
+# dim              = "#786e5c"   # hints, unfocused borders, footer, disclaimer
+# art              = "#302c24"   # tint for plain (non-ANSI) art
+# error            = "#ff5a3c"   # auth-failure text
+# background       = "#0a0a0c"   # canvas
+# field_background = "#18181c"   # input interiors

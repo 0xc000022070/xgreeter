@@ -53,8 +53,11 @@ pub fn spawn_mock() -> Channels {
     let (resp_tx, resp_rx) = mpsc::channel::<Response>(8);
 
     tokio::spawn(async move {
+        // Track greetd's "configuring" slot so demo reproduces the real IPC state
+        // machine, including rejecting a second CreateSession without a cancel.
+        let mut configuring = false;
         while let Some(req) = req_rx.recv().await {
-            let resp = mock_reply(&req);
+            let resp = mock_reply(&mut configuring, &req);
             // Small latency so the "authenticating" phase is actually visible.
             tokio::time::sleep(Duration::from_millis(180)).await;
             if resp_tx.send(resp).await.is_err() {
@@ -66,12 +69,25 @@ pub fn spawn_mock() -> Channels {
     Channels { req_tx, resp_rx }
 }
 
-pub fn mock_reply(req: &Request) -> Response {
+// Mirrors greetd's session lifecycle: one session may be "configuring" at a time,
+// a failed password leaves it configuring (greetd does not self-cancel), and only
+// CancelSession/StartSession clear it.
+pub fn mock_reply(configuring: &mut bool, req: &Request) -> Response {
     match req {
-        Request::CreateSession { .. } => Response::AuthMessage {
-            auth_message_type: AuthMessageType::Secret,
-            auth_message: "Password: ".into(),
-        },
+        Request::CreateSession { .. } => {
+            if *configuring {
+                return Response::Error {
+                    error_type: ErrorType::Error,
+                    description: "a session is already being configured".into(),
+                };
+            }
+            *configuring = true;
+            Response::AuthMessage {
+                auth_message_type: AuthMessageType::Secret,
+                auth_message: "Password: ".into(),
+            }
+        }
+        // On auth failure the session stays configured, exactly like greetd.
         Request::PostAuthMessageResponse { response } => match response.as_deref() {
             Some("demo") | Some("") | None => Response::Success,
             _ => Response::Error {
@@ -79,7 +95,10 @@ pub fn mock_reply(req: &Request) -> Response {
                 description: "authentication failed".into(),
             },
         },
-        Request::StartSession { .. } | Request::CancelSession => Response::Success,
+        Request::StartSession { .. } | Request::CancelSession => {
+            *configuring = false;
+            Response::Success
+        }
     }
 }
 
@@ -89,9 +108,13 @@ mod tests {
 
     #[test]
     fn create_session_prompts_for_password() {
-        let r = mock_reply(&Request::CreateSession {
-            username: "0xc000022070".into(),
-        });
+        let mut configuring = false;
+        let r = mock_reply(
+            &mut configuring,
+            &Request::CreateSession {
+                username: "0xc000022070".into(),
+            },
+        );
         assert!(matches!(
             r,
             Response::AuthMessage {
@@ -103,14 +126,21 @@ mod tests {
 
     #[test]
     fn correct_password_succeeds_wrong_fails() {
-        let ok = mock_reply(&Request::PostAuthMessageResponse {
-            response: Some("demo".into()),
-        });
+        let mut configuring = true;
+        let ok = mock_reply(
+            &mut configuring,
+            &Request::PostAuthMessageResponse {
+                response: Some("demo".into()),
+            },
+        );
         assert!(matches!(ok, Response::Success));
 
-        let bad = mock_reply(&Request::PostAuthMessageResponse {
-            response: Some("nope".into()),
-        });
+        let bad = mock_reply(
+            &mut configuring,
+            &Request::PostAuthMessageResponse {
+                response: Some("nope".into()),
+            },
+        );
         assert!(matches!(
             bad,
             Response::Error {
@@ -118,5 +148,34 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn second_create_without_cancel_is_rejected_but_cancel_recovers() {
+        let mut configuring = false;
+        mock_reply(
+            &mut configuring,
+            &Request::CreateSession {
+                username: "u".into(),
+            },
+        );
+        // A retry without cancelling first is rejected, mirroring greetd.
+        let dup = mock_reply(
+            &mut configuring,
+            &Request::CreateSession {
+                username: "u".into(),
+            },
+        );
+        assert!(matches!(dup, Response::Error { .. }));
+
+        // After a cancel the slot frees and a fresh create prompts again.
+        mock_reply(&mut configuring, &Request::CancelSession);
+        let fresh = mock_reply(
+            &mut configuring,
+            &Request::CreateSession {
+                username: "u".into(),
+            },
+        );
+        assert!(matches!(fresh, Response::AuthMessage { .. }));
     }
 }

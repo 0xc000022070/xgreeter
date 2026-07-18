@@ -26,10 +26,16 @@ impl LogBuffer {
         self.lines.push_back(line);
     }
 
-    /// Last `n` lines, oldest first.
-    pub fn tail(&self, n: usize) -> impl Iterator<Item = &str> {
-        let skip = self.lines.len().saturating_sub(n);
-        self.lines.iter().skip(skip).map(String::as_str)
+    /// A window of at most `rows` lines whose bottom edge sits `from_bottom`
+    /// lines above the newest line, oldest first. Powers the scrollable viewer.
+    pub fn window(&self, from_bottom: usize, rows: usize) -> impl Iterator<Item = &str> {
+        let end = self.lines.len().saturating_sub(from_bottom);
+        let start = end.saturating_sub(rows);
+        self.lines.iter().take(end).skip(start).map(String::as_str)
+    }
+
+    pub fn len(&self) -> usize {
+        self.lines.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -86,17 +92,28 @@ mod tests {
         b.push("a".into());
         b.push("b".into());
         b.push("c".into());
-        let got: Vec<_> = b.tail(5).collect();
+        let got: Vec<_> = b.window(0, 5).collect();
         assert_eq!(got, vec!["b", "c"]);
     }
 
     #[test]
-    fn tail_returns_last_n_oldest_first() {
+    fn window_returns_last_n_oldest_first() {
         let mut b = LogBuffer::new(10);
         for s in ["one", "two", "three"] {
             b.push(s.into());
         }
-        let got: Vec<_> = b.tail(2).collect();
+        let got: Vec<_> = b.window(0, 2).collect();
         assert_eq!(got, vec!["two", "three"]);
+    }
+
+    #[test]
+    fn window_offset_from_bottom_skips_newest() {
+        let mut b = LogBuffer::new(10);
+        for s in ["one", "two", "three", "four"] {
+            b.push(s.into());
+        }
+        // Two lines up from the bottom, a 2-row window shows one/two.
+        let got: Vec<_> = b.window(2, 2).collect();
+        assert_eq!(got, vec!["one", "two"]);
     }
 }

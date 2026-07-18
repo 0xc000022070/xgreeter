@@ -96,13 +96,27 @@ async fn event_loop<B: ratatui::backend::Backend>(
     let mut logs = LogBuffer::new(500);
     let mut events = EventStream::new();
     let mut ticker = tokio::time::interval(Duration::from_millis(120));
+    // Foreign writers (kernel/systemd) can paint over our frame; ratatui only
+    // repaints cells it knows changed, so force a full repaint on the tick after
+    // any log activity — adaptive noise-healing that stays quiet once boot settles.
+    let mut logs_dirty = false;
+    let mut force_clear = false;
 
     loop {
-        terminal.draw(|f| ui::draw(f, &app, &logs, chrome))?;
+        if std::mem::take(&mut force_clear) {
+            terminal.clear()?;
+        }
+        let mut scroll = app.log_scroll;
+        terminal.draw(|f| scroll = ui::draw(f, &app, &logs, chrome))?;
+        app.log_scroll = scroll;
 
         tokio::select! {
             _ = ticker.tick() => {
                 app.update(Action::Tick);
+                if logs_dirty {
+                    force_clear = true;
+                    logs_dirty = false;
+                }
             }
             maybe_event = events.next() => {
                 match maybe_event {
@@ -119,7 +133,7 @@ async fn event_loop<B: ratatui::backend::Backend>(
                             }
                             continue;
                         }
-                        if let Some(action) = map_key(key.code) {
+                        if let Some(action) = map_key(key.code, app.logs_open) {
                             let effects = app.update(action);
                             if let Some(outcome) = apply(effects, &greetd).await {
                                 return Ok(outcome);
@@ -141,6 +155,7 @@ async fn event_loop<B: ratatui::backend::Backend>(
             maybe_line = log_rx.recv() => {
                 if let Some(line) = maybe_line {
                     logs.push(line);
+                    logs_dirty = true;
                 }
             }
         }
@@ -153,9 +168,24 @@ fn parse_art(s: &str) -> Text<'static> {
     s.into_text().unwrap_or_else(|_| Text::from(s.to_string()))
 }
 
-fn map_key(code: KeyCode) -> Option<Action> {
+fn map_key(code: KeyCode, logs_open: bool) -> Option<Action> {
+    // While the log viewer is up, keys drive scrolling; nothing reaches the
+    // credential fields, so plain letters are safe as scroll/close shortcuts.
+    if logs_open {
+        return match code {
+            KeyCode::F(2) | KeyCode::Esc | KeyCode::Char('q') => Some(Action::ToggleLogs),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::ScrollLogs(1)),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::ScrollLogs(-1)),
+            KeyCode::PageUp => Some(Action::ScrollLogs(10)),
+            KeyCode::PageDown => Some(Action::ScrollLogs(-10)),
+            KeyCode::Home => Some(Action::ScrollLogs(i32::MAX)),
+            KeyCode::End => Some(Action::ScrollLogs(i32::MIN)),
+            _ => None,
+        };
+    }
     match code {
         KeyCode::Enter => Some(Action::Submit),
+        KeyCode::F(2) => Some(Action::ToggleLogs),
         KeyCode::Tab | KeyCode::BackTab | KeyCode::Down | KeyCode::Up => Some(Action::FocusToggle),
         KeyCode::Backspace => Some(Action::Backspace),
         KeyCode::Esc => Some(Action::Cancel),

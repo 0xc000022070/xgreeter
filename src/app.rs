@@ -68,6 +68,14 @@ pub struct AppState {
     session_cmd: Vec<String>,
     /// The typed password still needs to be auto-fed to the first secret prompt.
     creds_pending: bool,
+    /// A CancelSession is in flight; swallow greetd's single Success ack for it
+    /// so it isn't misread as a passwordless auth success on the next attempt.
+    cancel_ack_pending: bool,
+    /// Full-screen log viewer is up instead of the login panel.
+    pub logs_open: bool,
+    /// Lines the log viewer is scrolled up from the newest line (0 = follow tail).
+    /// The UI clamps this against real content each frame and writes it back.
+    pub log_scroll: u16,
 }
 
 #[derive(Debug)]
@@ -79,6 +87,10 @@ pub enum Action {
     Cancel,
     Greetd(Response),
     Tick,
+    /// Toggle the full-screen log viewer.
+    ToggleLogs,
+    /// Scroll the log viewer: positive = older, negative = newer.
+    ScrollLogs(i32),
 }
 
 impl AppState {
@@ -99,6 +111,9 @@ impl AppState {
             tick: 0,
             session_cmd,
             creds_pending: false,
+            cancel_ack_pending: false,
+            logs_open: false,
+            log_scroll: 0,
         }
     }
 
@@ -157,6 +172,20 @@ impl AppState {
             Action::Submit => self.on_submit(),
             Action::Cancel => self.on_cancel(),
             Action::Greetd(resp) => self.on_greetd(resp),
+            Action::ToggleLogs => {
+                self.logs_open = !self.logs_open;
+                if self.logs_open {
+                    self.log_scroll = 0;
+                }
+                Vec::new()
+            }
+            Action::ScrollLogs(delta) if self.logs_open => {
+                // Lower bound only; the UI clamps the top against real content.
+                let next = i64::from(self.log_scroll) + i64::from(delta);
+                self.log_scroll = next.clamp(0, i64::from(u16::MAX)) as u16;
+                Vec::new()
+            }
+            Action::ScrollLogs(_) => Vec::new(),
         }
     }
 
@@ -185,6 +214,7 @@ impl AppState {
     fn on_cancel(&mut self) -> Vec<Effect> {
         if self.in_auth_chain() {
             self.reset_to_idle();
+            self.cancel_ack_pending = true;
             return vec![Effect::Send(Request::CancelSession)];
         }
         // Only demo may leave; the real greeter must never exit without a session.
@@ -245,6 +275,12 @@ impl AppState {
     }
 
     fn on_success(&mut self) -> Vec<Effect> {
+        // A pending CancelSession ack: swallow exactly one Success so it can't be
+        // mistaken for a passwordless auth success mid-retry.
+        if self.cancel_ack_pending {
+            self.cancel_ack_pending = false;
+            return Vec::new();
+        }
         match self.phase {
             Phase::Starting => {
                 self.phase = Phase::Done;
@@ -277,7 +313,12 @@ impl AppState {
             ErrorType::Error => format!("error: {description}"),
         };
         self.phase = Phase::Failed(msg);
-        Vec::new()
+        // greetd keeps the session in its "configuring" slot after an auth error
+        // and does not self-cancel; without this the next CreateSession is
+        // rejected with "a session is already being configured", locking the user
+        // out after a single mistyped password until reboot.
+        self.cancel_ack_pending = true;
+        vec![Effect::Send(Request::CancelSession)]
     }
 }
 
@@ -351,9 +392,99 @@ mod tests {
             error_type: ErrorType::AuthError,
             description: String::new(),
         }));
-        assert!(e.is_empty());
+        // Must cancel greetd's still-configuring session, not sit idle.
+        assert_eq!(e, vec![Effect::Send(Request::CancelSession)]);
         assert_eq!(a.phase, Phase::Failed("access denied".into()));
         assert_eq!(a.password, "");
+    }
+
+    #[test]
+    fn auth_error_cancels_then_retry_reaches_launch() {
+        let mut a = app();
+        a.password = "bad".into();
+        a.update(Action::Submit);
+        a.update(Action::Greetd(Response::AuthMessage {
+            auth_message_type: AuthMessageType::Secret,
+            auth_message: "Password: ".into(),
+        }));
+        let e = a.update(Action::Greetd(Response::Error {
+            error_type: ErrorType::AuthError,
+            description: String::new(),
+        }));
+        assert_eq!(e, vec![Effect::Send(Request::CancelSession)]);
+
+        // greetd acks the cancel; it must be swallowed, phase unchanged.
+        let e = a.update(Action::Greetd(Response::Success));
+        assert!(e.is_empty());
+        assert_eq!(a.phase, Phase::Failed("access denied".into()));
+
+        // Retry with the right password now yields a fresh session, not a
+        // "already being configured" error.
+        a.password = "hunter2".into();
+        let e = a.update(Action::Submit);
+        assert_eq!(
+            e,
+            vec![Effect::Send(Request::CreateSession {
+                username: "0xc000022070".into()
+            })]
+        );
+        a.update(Action::Greetd(Response::AuthMessage {
+            auth_message_type: AuthMessageType::Secret,
+            auth_message: "Password: ".into(),
+        }));
+        let e = a.update(Action::Greetd(Response::Success));
+        assert_eq!(
+            e,
+            vec![Effect::Send(Request::StartSession {
+                cmd: vec!["start-hyprland".into()],
+                env: vec![]
+            })]
+        );
+    }
+
+    #[test]
+    fn late_cancel_ack_during_retry_is_not_auth_success() {
+        // The cancel ack can be delivered after the user has already retried and
+        // moved to Creating; it must not be read as a passwordless success.
+        let mut a = app();
+        a.password = "bad".into();
+        a.update(Action::Submit);
+        a.update(Action::Greetd(Response::AuthMessage {
+            auth_message_type: AuthMessageType::Secret,
+            auth_message: "Password: ".into(),
+        }));
+        a.update(Action::Greetd(Response::Error {
+            error_type: ErrorType::AuthError,
+            description: String::new(),
+        }));
+
+        // Retry fires before the cancel ack arrives.
+        a.password = "hunter2".into();
+        let e = a.update(Action::Submit);
+        assert_eq!(
+            e,
+            vec![Effect::Send(Request::CreateSession {
+                username: "0xc000022070".into()
+            })]
+        );
+        assert_eq!(a.phase, Phase::Creating);
+
+        // Now the delayed cancel ack lands while Creating: swallowed, not started.
+        let e = a.update(Action::Greetd(Response::Success));
+        assert!(e.is_empty());
+        assert_eq!(a.phase, Phase::Creating);
+
+        // The real CreateSession reply still drives the password prompt.
+        let e = a.update(Action::Greetd(Response::AuthMessage {
+            auth_message_type: AuthMessageType::Secret,
+            auth_message: "Password: ".into(),
+        }));
+        assert_eq!(
+            e,
+            vec![Effect::Send(Request::PostAuthMessageResponse {
+                response: Some("hunter2".into())
+            })]
+        );
     }
 
     #[test]

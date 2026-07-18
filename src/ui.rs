@@ -10,7 +10,6 @@ use crate::theme::Theme;
 
 const SPINNER: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const MASK: char = '•';
-const FOOTER_H: u16 = 4;
 const DISCLAIMER_MAX_H: u16 = 8;
 
 pub struct Chrome<'a> {
@@ -20,20 +19,24 @@ pub struct Chrome<'a> {
     pub show_help: bool,
 }
 
-pub fn draw(f: &mut Frame, app: &AppState, logs: &LogBuffer, chrome: &Chrome) {
+/// Renders a frame and returns the log scroll offset clamped to real content, so
+/// the caller can write it back and self-correct any overscroll.
+pub fn draw(f: &mut Frame, app: &AppState, logs: &LogBuffer, chrome: &Chrome) -> u16 {
     let area = f.area();
     let theme = chrome.theme;
 
     f.render_widget(Block::default().style(Style::default().bg(theme.bg)), area);
 
-    let [stage, footer] =
-        Layout::vertical([Constraint::Min(0), Constraint::Length(FOOTER_H)]).areas(area);
-
-    if let Some(art) = chrome.art {
-        render_art(f, stage, art, theme);
+    if app.logs_open {
+        return render_logs(f, area, logs, app, theme);
     }
-    render_login(f, stage, app, chrome);
-    render_footer(f, footer, logs, theme);
+
+    // Default page: the whole area is the login stage; logs live behind F2.
+    if let Some(art) = chrome.art {
+        render_art(f, area, art, theme);
+    }
+    render_login(f, area, app, chrome);
+    app.log_scroll
 }
 
 /// User-supplied art, centered in the stage as a background layer. The login
@@ -214,7 +217,7 @@ fn status_line(app: &AppState, theme: &Theme, show_help: bool) -> (String, Style
         Phase::Idle => {
             // Only reached with show_help on; otherwise the row is omitted.
             let _ = show_help;
-            let base = "TAB switch field   ·   ENTER authenticate";
+            let base = "TAB switch field   ·   ENTER authenticate   ·   F2 logs";
             if app.demo {
                 (format!("{base}   ·   ESC quit  [demo]"), dim)
             } else {
@@ -237,31 +240,54 @@ fn status_line(app: &AppState, theme: &Theme, show_help: bool) -> (String, Style
     }
 }
 
-fn render_footer(f: &mut Frame, footer: Rect, logs: &LogBuffer, theme: &Theme) {
-    let block = Block::default()
-        .borders(Borders::TOP)
-        .border_style(Style::default().fg(theme.dim))
-        .title(Span::styled(
-            " SYSTEM INIT ",
-            Style::default().fg(theme.dim).add_modifier(Modifier::DIM),
-        ))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(footer);
-    f.render_widget(block, footer);
+/// Full-screen scrollable log viewer (F2). Returns the scroll offset clamped to
+/// the available content so the caller can persist the corrected value.
+fn render_logs(f: &mut Frame, area: Rect, logs: &LogBuffer, app: &AppState, theme: &Theme) -> u16 {
+    let [head, body, foot] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(0),
+        Constraint::Length(1),
+    ])
+    .areas(area);
 
-    let rows = inner.height as usize;
+    let rows = body.height as usize;
+    let max_scroll = logs.len().saturating_sub(rows);
+    let scroll = (app.log_scroll as usize).min(max_scroll);
+
+    let pos = if scroll == 0 {
+        "live".to_string()
+    } else {
+        format!("-{scroll}")
+    };
+    f.render_widget(
+        Paragraph::new(format!(" SYSTEM LOGS   [{pos}]   {} lines", logs.len())).style(
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        ),
+        head,
+    );
+
     let lines: Vec<Line> = if logs.is_empty() {
         vec![Line::styled(
             "// awaiting system logs…",
             Style::default().fg(theme.dim),
         )]
     } else {
-        logs.tail(rows)
-            .map(|l| Line::styled(l.to_string(), Style::default().fg(theme.dim)))
+        logs.window(scroll, rows)
+            .map(|l| Line::styled(l.to_string(), Style::default().fg(theme.fg)))
             .collect()
     };
+    f.render_widget(Paragraph::new(lines), body);
 
-    f.render_widget(Paragraph::new(lines), inner);
+    f.render_widget(
+        Paragraph::new("↑/↓ PgUp/PgDn Home/End scroll   ·   F2/ESC close")
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(theme.dim)),
+        foot,
+    );
+
+    scroll as u16
 }
 
 fn centered(area: Rect, w: u16, h: u16) -> Rect {
@@ -302,10 +328,22 @@ mod tests {
     }
 
     fn render_to_string(app: &AppState, chrome: &Chrome, w: u16, h: u16) -> String {
+        render_with_logs(app, chrome, &LogBuffer::new(10), w, h)
+    }
+
+    fn render_with_logs(
+        app: &AppState,
+        chrome: &Chrome,
+        logs: &LogBuffer,
+        w: u16,
+        h: u16,
+    ) -> String {
         use ratatui::{backend::TestBackend, Terminal};
-        let logs = LogBuffer::new(10);
         let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
-        terminal.draw(|f| draw(f, app, &logs, chrome)).unwrap();
+        terminal.draw(|f| {
+            draw(f, app, logs, chrome);
+        })
+        .unwrap();
         terminal
             .backend()
             .buffer()
@@ -325,13 +363,32 @@ mod tests {
     }
 
     #[test]
-    fn login_screen_shows_user_and_fields() {
+    fn login_screen_shows_user_and_fields_but_no_log_panel() {
         let theme = Theme::preset(Accent::Amber);
         let screen = render_to_string(&app(), &chrome(&theme, None, true), 100, 30);
         assert!(screen.contains("LOGGING AS 0xc000022070"));
         assert!(screen.contains("USER"));
         assert!(screen.contains("PASS"));
-        assert!(screen.contains("SYSTEM INIT"));
+        // Logs are gated behind F2 now, not painted on the login page.
+        assert!(screen.contains("F2 logs"));
+        assert!(!screen.contains("SYSTEM LOGS"));
+    }
+
+    #[test]
+    fn log_viewer_shows_lines_and_scroll_hint() {
+        let theme = Theme::preset(Accent::Amber);
+        let mut logs = LogBuffer::new(50);
+        for i in 0..20 {
+            logs.push(format!("event number {i}"));
+        }
+        let mut a = app();
+        a.logs_open = true;
+        let screen = render_with_logs(&a, &chrome(&theme, None, true), &logs, 100, 30);
+        assert!(screen.contains("SYSTEM LOGS"));
+        assert!(screen.contains("event number 19"));
+        assert!(screen.contains("close"));
+        // The login panel is not drawn while the viewer is up.
+        assert!(!screen.contains("LOGGING AS"));
     }
 
     #[test]

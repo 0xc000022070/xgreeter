@@ -1,12 +1,12 @@
 # 0xc000022070's greeter config. Every key is optional; unset keys keep the
-# built-in defaults. Point the binary at it with `greeter --config PATH`.
+# built-in defaults. Point the binary at it with `xgreeter --config PATH`.
 # Relative *_path values resolve against this file's directory.
 
 # argv (NOT a shell string) greetd execs as the session after auth succeeds.
 session_cmd = ["start-hyprland"]
 
-# Prefilled username. Empty string starts the caret on the USER field.
-default_user = "0xc000022070"
+# Prefilled username. Default is empty, which starts the caret on the USER field.
+default_user = ""
 
 # Standalone status-bar prompt shown before a username is typed. Once one is
 # typed the bar switches to "LOGGING AS <user>".

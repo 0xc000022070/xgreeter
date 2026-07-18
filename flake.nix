@@ -11,18 +11,18 @@
     forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
   in {
     packages = forAllSystems (pkgs: let
-      greeter = pkgs.callPackage ./nix/package.nix {};
+      xgreeter = pkgs.callPackage ./nix/package.nix {};
     in {
-      inherit greeter;
-      default = greeter;
+      inherit xgreeter;
+      default = xgreeter;
     });
 
     overlays.default = _: prev: {
-      greeter = prev.callPackage ./nix/package.nix {};
+      xgreeter = prev.callPackage ./nix/package.nix {};
     };
 
     nixosModules.default = import ./nix/nixos-module.nix self;
-    nixosModules.greeter = self.nixosModules.default;
+    nixosModules.xgreeter = self.nixosModules.default;
 
     devShells = forAllSystems (pkgs: {
       default = pkgs.mkShell {

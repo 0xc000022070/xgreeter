@@ -22,7 +22,7 @@ self-exits).
 
 ## Configure
 
-Everything is config-driven; `greeter.example.toml` documents every key. The
+Everything is config-driven; `xgreeter.example.toml` documents every key. The
 knobs: `session_cmd`, `default_user`, `idle_status`, `log_cmd`, `accent`
 (amber/blue/green/mono), per-color hex `[colors]`, `show_help`, `art`/`art_path`
 (ASCII or ANSI — a fastfetch/neofetch dump works, omit for none), and
@@ -33,15 +33,15 @@ Fonts aren't an app setting — a TUI draws with the console/VT font. On NixOS s
 
 ## Nix
 
-The flake exposes `packages.<system>.greeter`, an `overlays.default`, and a
+The flake exposes `packages.<system>.xgreeter`, an `overlays.default`, and a
 **NixOS module** (`nixosModules.default`). greetd runs the greeter as a system
 user before login, so it is system-scope, not home-manager: the module generates
 a world-readable config store path, installs the binary, and can grant the
 greetd user journal access for the footer.
 
 ```nix
-# flake input: greeter.url = "github:0xc000022070/greeter";
-imports = [ inputs.greeter.nixosModules.default ];
+# flake input: xgreeter.url = "github:0xc000022070/xgreeter";
+imports = [ inputs.xgreeter.nixosModules.default ];
 
 programs.xgreeter = {
   enable = true;
@@ -59,13 +59,13 @@ NixOS generation for one-click rollback:
 
 ```nix
 services.greetd.settings.default_session.command =
-  "${config.programs.xgreeter.package}/bin/greeter --config ${config.programs.xgreeter.configFile}";
+  "${lib.getExe config.programs.xgreeter.package} --config ${config.programs.xgreeter.configFile}";
 ```
 
 Before switching the display manager, dry-run on a spare VT (Ctrl-Alt-F3):
 
 ```sh
-GREETD_SOCK=/run/greetd.sock greeter --config <path>
+GREETD_SOCK=/run/greetd.sock xgreeter --config <path>
 ```
 
 ## Test

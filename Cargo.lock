@@ -371,22 +371,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "greeter"
-version = "0.1.0"
-dependencies = [
- "ansi-to-tui",
- "anyhow",
- "clap",
- "crossterm",
- "futures",
- "greetd_ipc",
- "ratatui",
- "serde",
- "tokio",
- "toml",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1066,6 +1050,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "xgreeter"
+version = "0.1.0"
+dependencies = [
+ "ansi-to-tui",
+ "anyhow",
+ "clap",
+ "crossterm",
+ "futures",
+ "greetd_ipc",
+ "ratatui",
+ "serde",
+ "tokio",
+ "toml",
 ]
 
 [[package]]

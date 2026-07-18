@@ -8,7 +8,7 @@ use crate::theme::{parse_hex, Accent, Overrides};
 
 /// 0xc000022070's greeter - a ctOS-flavored ratatui frontend for greetd.
 #[derive(Debug, Parser)]
-#[command(name = "greeter", version, about)]
+#[command(name = "xgreeter", version, about)]
 pub struct Cli {
     /// Path to a TOML config file. CLI flags override its values.
     #[arg(short, long)]
@@ -42,7 +42,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             session_cmd: vec!["start-hyprland".into()],
-            default_user: "0xc000022070".into(),
+            default_user: String::new(),
             idle_status: "AWAITING IDENTIFICATION".into(),
             log_cmd: shell_words("journalctl -b -n 40 -f -o cat"),
             accent: Accent::Amber,

@@ -1,12 +1,12 @@
 [package]
-name = "greeter"
+name = "xgreeter"
 version = "0.1.0"
 edition = "2021"
 description = "0xc000022070's greeter - a ctOS-flavored ratatui frontend for greetd"
 license = "MIT"
 
 [[bin]]
-name = "greeter"
+name = "xgreeter"
 path = "src/main.rs"
 
 [dependencies]

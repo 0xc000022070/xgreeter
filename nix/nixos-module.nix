@@ -48,8 +48,8 @@ in {
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = self.packages.${pkgs.stdenv.hostPlatform.system}.greeter;
-      defaultText = lib.literalExpression "greeter.packages.\${system}.greeter";
+      default = self.packages.${pkgs.stdenv.hostPlatform.system}.xgreeter;
+      defaultText = lib.literalExpression "xgreeter.packages.\${system}.xgreeter";
       description = "The greeter package to install.";
     };
 
@@ -145,7 +145,7 @@ in {
       description = ''
         The generated config, as a world-readable /nix/store path. Point greetd
         at it, e.g. `services.greetd.settings.default_session.command =
-          "''${config.programs.xgreeter.package}/bin/greeter --config ''${config.programs.xgreeter.configFile}"`.
+          "''${lib.getExe config.programs.xgreeter.package} --config ''${config.programs.xgreeter.configFile}"`.
       '';
     };
   };

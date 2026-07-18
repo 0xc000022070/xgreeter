@@ -57,7 +57,7 @@ fn request_eq(a: &Request, b: &Request) -> bool {
 
 #[derive(Debug, Clone)]
 pub struct AppState {
-    pub brand: String,
+    pub idle_status: String,
     pub user: String,
     pub password: String,
     pub focus: Field,
@@ -82,14 +82,14 @@ pub enum Action {
 }
 
 impl AppState {
-    pub fn new(brand: String, user: String, session_cmd: Vec<String>, demo: bool) -> Self {
+    pub fn new(idle_status: String, user: String, session_cmd: Vec<String>, demo: bool) -> Self {
         let focus = if user.is_empty() {
             Field::User
         } else {
             Field::Password
         };
         AppState {
-            brand,
+            idle_status,
             user,
             password: String::new(),
             focus,
@@ -287,7 +287,7 @@ mod tests {
 
     fn app() -> AppState {
         AppState::new(
-            "0xc000022070".into(),
+            "AWAITING IDENTIFICATION".into(),
             "0xc000022070".into(),
             vec!["start-hyprland".into()],
             true,

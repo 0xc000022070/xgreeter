@@ -147,13 +147,14 @@ fn render_fields(f: &mut Frame, fields: Rect, app: &AppState, theme: &Theme) {
 }
 
 fn render_bar(f: &mut Frame, bar: Rect, app: &AppState, theme: &Theme) {
-    let name = if app.user.trim().is_empty() {
-        app.brand.as_str()
+    // Idle shows the standalone prompt; a typed username switches to LOGGING AS.
+    let text = if app.user.trim().is_empty() {
+        app.idle_status.clone()
     } else {
-        app.user.as_str()
+        format!("LOGGING AS {}", app.user)
     };
     f.render_widget(
-        Paragraph::new(format!("LOGGING AS {name}"))
+        Paragraph::new(text)
             .alignment(Alignment::Center)
             .style(
                 Style::default()
@@ -316,7 +317,7 @@ mod tests {
 
     fn app() -> AppState {
         AppState::new(
-            "0xc000022070".into(),
+            "AWAITING IDENTIFICATION".into(),
             "0xc000022070".into(),
             vec!["start-hyprland".into()],
             true,
@@ -324,13 +325,23 @@ mod tests {
     }
 
     #[test]
-    fn login_screen_shows_brand_and_fields() {
+    fn login_screen_shows_user_and_fields() {
         let theme = Theme::preset(Accent::Amber);
         let screen = render_to_string(&app(), &chrome(&theme, None, true), 100, 30);
         assert!(screen.contains("LOGGING AS 0xc000022070"));
         assert!(screen.contains("USER"));
         assert!(screen.contains("PASS"));
         assert!(screen.contains("SYSTEM INIT"));
+    }
+
+    #[test]
+    fn idle_bar_shows_idle_status_without_prefix() {
+        let theme = Theme::preset(Accent::Amber);
+        let mut a = app();
+        a.user.clear();
+        let screen = render_to_string(&a, &chrome(&theme, None, true), 100, 30);
+        assert!(screen.contains("AWAITING IDENTIFICATION"));
+        assert!(!screen.contains("LOGGING AS"));
     }
 
     #[test]

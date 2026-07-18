@@ -8,8 +8,9 @@ session_cmd = ["start-hyprland"]
 # Prefilled username. Empty string starts the caret on the USER field.
 default_user = "0xc000022070"
 
-# Text on the status bar before a username is typed.
-brand = "0xc000022070"
+# Standalone status-bar prompt shown before a username is typed. Once one is
+# typed the bar switches to "LOGGING AS <user>".
+idle_status = "AWAITING IDENTIFICATION"
 
 # argv whose stdout streams into the SYSTEM INIT footer. Must be an argv array.
 # The greeter user needs journal read access for this default (see README).

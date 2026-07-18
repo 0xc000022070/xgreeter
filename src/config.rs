@@ -29,7 +29,7 @@ pub struct Config {
     /// argv greetd execs as the session, not a shell string.
     pub session_cmd: Vec<String>,
     pub default_user: String,
-    pub brand: String,
+    pub idle_status: String,
     pub log_cmd: Vec<String>,
     pub accent: Accent,
     pub overrides: Overrides,
@@ -43,7 +43,7 @@ impl Default for Config {
         Config {
             session_cmd: vec!["start-hyprland".into()],
             default_user: "0xc000022070".into(),
-            brand: "0xc000022070".into(),
+            idle_status: "AWAITING IDENTIFICATION".into(),
             log_cmd: shell_words("journalctl -b -n 40 -f -o cat"),
             accent: Accent::Amber,
             overrides: Overrides::default(),
@@ -60,7 +60,7 @@ impl Default for Config {
 struct FileConfig {
     session_cmd: Option<Vec<String>>,
     default_user: Option<String>,
-    brand: Option<String>,
+    idle_status: Option<String>,
     log_cmd: Option<Vec<String>>,
     accent: Option<Accent>,
     show_help: Option<bool>,
@@ -111,8 +111,8 @@ impl Config {
         if let Some(v) = file.default_user {
             self.default_user = v;
         }
-        if let Some(v) = file.brand {
-            self.brand = v;
+        if let Some(v) = file.idle_status {
+            self.idle_status = v;
         }
         if let Some(v) = file.log_cmd {
             self.log_cmd = v;

@@ -32,7 +32,7 @@ self: {
     prune {
       session_cmd = cfg.sessionCmd;
       default_user = cfg.defaultUser;
-      brand = cfg.brand;
+      idle_status = cfg.idleStatus;
       log_cmd = cfg.logCmd;
       accent = cfg.accent;
       show_help = cfg.showHelp;
@@ -66,10 +66,11 @@ in {
       description = "Prefilled username.";
     };
 
-    brand = lib.mkOption {
+    idleStatus = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "Status-bar label shown before a username is typed.";
+      example = "AWAITING IDENTIFICATION";
+      description = "Standalone status-bar prompt shown before a username is typed. Once one is typed the bar switches to `LOGGING AS <user>`.";
     };
 
     logCmd = lib.mkOption {

@@ -23,7 +23,7 @@ self-exits).
 ## Configure
 
 Everything is config-driven; `greeter.example.toml` documents every key. The
-knobs: `session_cmd`, `default_user`, `brand`, `log_cmd`, `accent`
+knobs: `session_cmd`, `default_user`, `idle_status`, `log_cmd`, `accent`
 (amber/blue/green/mono), per-color hex `[colors]`, `show_help`, `art`/`art_path`
 (ASCII or ANSI — a fastfetch/neofetch dump works, omit for none), and
 `disclaimer`/`disclaimer_path`.

@@ -52,7 +52,7 @@ async fn run(cli: &Cli, cfg: Config) -> Result<()> {
     let theme = Theme::resolve(cfg.accent, &cfg.overrides);
     let art = cfg.art.as_deref().map(parse_art);
     let app = AppState::new(
-        cfg.brand.clone(),
+        cfg.idle_status.clone(),
         cfg.default_user.clone(),
         cfg.session_cmd.clone(),
         demo,

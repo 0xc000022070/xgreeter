@@ -34,33 +34,32 @@ Fonts aren't an app setting — a TUI draws with the console/VT font. On NixOS s
 ## Nix
 
 The flake exposes `packages.<system>.greeter`, an `overlays.default`, and a
-home-manager module that generates the config and puts the binary on `PATH`:
+**NixOS module** (`nixosModules.default`). greetd runs the greeter as a system
+user before login, so it is system-scope, not home-manager: the module generates
+a world-readable config store path, installs the binary, and can grant the
+greetd user journal access for the footer.
 
 ```nix
-# flake inputs: greeter.url = "path:./greeter";  (or your fork's URL)
-imports = [ inputs.greeter.homeModules.default ];
+# flake input: greeter.url = "github:0xc000022070/greeter";
+imports = [ inputs.greeter.nixosModules.default ];
 
-programs.greeter = {
+programs.xgreeter = {
   enable = true;
+  sessionCmd = [ "${pkgs.hyprland}/bin/start-hyprland" ];
   accent = "amber";
-  sessionCmd = [ "start-hyprland" ];
-  disclaimer = "authorized access only";
+  idleStatus = "AWAITING IDENTIFICATION";
+  journalUser = "greeter";            # greetd's user; joins systemd-journal for logCmd
   colors.accent = "#ffb000";
 };
 ```
 
-Wiring into greetd is a *system* change — do it only after `--demo` looks right,
-and keep the previous NixOS generation for one-click rollback. The module's
-`configFile` output is a world-readable store path, so the greetd user (not your
-login user) can read it. Reference it from system config and grant journal
-access for the footer:
+The module does **not** touch greetd — wiring the login path is your explicit,
+boot-critical step. Do it only after `--demo` looks right, and keep the previous
+NixOS generation for one-click rollback:
 
 ```nix
-# greeter pkg via overlays.default; cfg = the HM user's programs.greeter config,
-# e.g. config.home-manager.users.you.programs.greeter
-users.users.greeter.extraGroups = [ "systemd-journal" ];
 services.greetd.settings.default_session.command =
-  "${pkgs.greeter}/bin/greeter --config ${cfg.configFile}";
+  "${config.programs.xgreeter.package}/bin/greeter --config ${config.programs.xgreeter.configFile}";
 ```
 
 Before switching the display manager, dry-run on a spare VT (Ctrl-Alt-F3):

@@ -4,7 +4,7 @@ self: {
   pkgs,
   ...
 }: let
-  cfg = config.programs.greeter;
+  cfg = config.programs.xgreeter;
   toml = pkgs.formats.toml {};
 
   colorOpt = name:
@@ -43,7 +43,7 @@ self: {
     }
     // lib.optionalAttrs (colors != {}) {inherit colors;};
 in {
-  options.programs.greeter = {
+  options.programs.xgreeter = {
     enable = lib.mkEnableOption "0xc000022070's greeter";
 
     package = lib.mkOption {
@@ -51,6 +51,18 @@ in {
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.greeter;
       defaultText = lib.literalExpression "greeter.packages.\${system}.greeter";
       description = "The greeter package to install.";
+    };
+
+    journalUser = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "greeter";
+      description = ''
+        User greetd runs the greeter as. When set, it is added to the
+        `systemd-journal` group so the default `logCmd` (journalctl) can read the
+        journal. The user must already exist (greetd creates `greeter`). Null
+        leaves group membership untouched.
+      '';
     };
 
     sessionCmd = lib.mkOption {
@@ -63,7 +75,7 @@ in {
     defaultUser = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "Prefilled username.";
+      description = "Prefilled username. Empty string starts the caret on the USER field.";
     };
 
     idleStatus = lib.mkOption {
@@ -131,18 +143,19 @@ in {
       type = lib.types.path;
       readOnly = true;
       description = ''
-        The generated config, as a /nix/store path. Point greetd at it, e.g.
-        `services.greetd.settings.default_session.command =
-          "''${greeter}/bin/greeter --config ''${config.programs.greeter.configFile}"`.
+        The generated config, as a world-readable /nix/store path. Point greetd
+        at it, e.g. `services.greetd.settings.default_session.command =
+          "''${config.programs.xgreeter.package}/bin/greeter --config ''${config.programs.xgreeter.configFile}"`.
       '';
     };
   };
 
   config = lib.mkIf cfg.enable {
-    home.packages = [cfg.package];
-    # World-readable store path, so the greetd-spawned greeter (a different user)
-    # can still read it.
-    programs.greeter.configFile = toml.generate "greeter.toml" settings;
-    xdg.configFile."greeter/config.toml".source = cfg.configFile;
+    environment.systemPackages = [cfg.package];
+    programs.xgreeter.configFile = toml.generate "greeter.toml" settings;
+
+    users.users = lib.optionalAttrs (cfg.journalUser != null) {
+      ${cfg.journalUser}.extraGroups = ["systemd-journal"];
+    };
   };
 }

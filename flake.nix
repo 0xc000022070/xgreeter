@@ -21,8 +21,8 @@
       greeter = prev.callPackage ./nix/package.nix {};
     };
 
-    homeModules.default = import ./nix/hm-module.nix self;
-    homeModules.greeter = self.homeModules.default;
+    nixosModules.default = import ./nix/nixos-module.nix self;
+    nixosModules.greeter = self.nixosModules.default;
 
     devShells = forAllSystems (pkgs: {
       default = pkgs.mkShell {

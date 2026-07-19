@@ -20,6 +20,12 @@ log_cmd = ["journalctl", "-b", "-n", "40", "-f", "-o", "cat"]
 # failure messages always show regardless of this.
 show_help = true
 
+# Procedural ASCII tunnel behind the login box: a demoscene-style flight down a
+# spiraling ring tunnel, themed and looping. ON by default; while on, `art` below
+# is ignored. Set false (or pass --no-tunnel) to show `art` instead.
+# Preview it full-screen with `xgreeter --tunnel-demo` (no login, no greetd).
+tunnel = true
+
 # Background art behind the login box. Plain ASCII is tinted with colors.art;
 # raw ANSI escape codes (e.g. a fastfetch logo) keep their own colors.
 # Provide inline OR via file (art_path wins). Omit both for no art.

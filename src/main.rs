@@ -3,16 +3,21 @@ mod config;
 mod greetd;
 mod logs;
 mod theme;
+mod tunnel;
 mod ui;
 
 use std::time::Duration;
 
-use anyhow::Result;
 use ansi_to_tui::IntoText;
+use anyhow::Result;
 use clap::Parser;
 use futures::StreamExt;
 use ratatui::crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::layout::{Alignment, Constraint, Layout};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::Text;
+use ratatui::widgets::{Block, Paragraph};
+use ratatui::Frame;
 
 use crate::app::{Action, AppState, Effect};
 use crate::config::{Cli, Config};
@@ -30,6 +35,16 @@ enum Outcome {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     let cfg = Config::load(&cli)?;
+
+    // Standalone showcase: full-screen tunnel, no config auth, no greetd.
+    if cli.tunnel_demo {
+        let theme = Theme::resolve(cfg.accent, &cfg.overrides);
+        let mut terminal = ratatui::init();
+        let result = tunnel_demo_loop(&mut terminal, &theme).await;
+        ratatui::restore();
+        return result;
+    }
+
     run(&cli, cfg).await
 }
 
@@ -62,6 +77,7 @@ async fn run(cli: &Cli, cfg: Config) -> Result<()> {
     let chrome = Chrome {
         theme: &theme,
         art: art.as_ref(),
+        tunnel: cfg.tunnel,
         disclaimer: cfg.disclaimer.as_deref(),
         show_help: cfg.show_help,
     };
@@ -192,6 +208,57 @@ fn map_key(code: KeyCode, logs_open: bool) -> Option<Action> {
         KeyCode::Char(c) => Some(Action::Char(c)),
         _ => None,
     }
+}
+
+/// Hands-off showcase: the tunnel animates full-screen forever with a caption.
+/// No greetd, no auth — a phone-friendly demo.
+async fn tunnel_demo_loop<B: ratatui::backend::Backend>(
+    terminal: &mut ratatui::Terminal<B>,
+    theme: &Theme,
+) -> Result<()> {
+    let mut events = EventStream::new();
+    let mut ticker = tokio::time::interval(Duration::from_millis(120));
+    let mut tick: u64 = 0;
+
+    loop {
+        terminal.draw(|f| tunnel_demo_draw(f, tick, theme))?;
+
+        tokio::select! {
+            _ = ticker.tick() => tick = tick.wrapping_add(1),
+            ev = events.next() => match ev {
+                Some(Ok(Event::Key(k))) => {
+                    if k.kind == KeyEventKind::Release {
+                        continue;
+                    }
+                    let quit = matches!(k.code, KeyCode::Esc | KeyCode::Char('q'))
+                        || (k.modifiers.contains(KeyModifiers::CONTROL)
+                            && matches!(k.code, KeyCode::Char('c')));
+                    if quit {
+                        return Ok(());
+                    }
+                }
+                Some(Ok(_)) => {}
+                Some(Err(_)) | None => return Ok(()),
+            }
+        }
+    }
+}
+
+fn tunnel_demo_draw(f: &mut Frame, tick: u64, theme: &Theme) {
+    let area = f.area();
+    f.render_widget(Block::default().style(Style::default().bg(theme.bg)), area);
+
+    let [body, foot] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
+
+    let sprite = tunnel::frame(tick, body.width, body.height, theme);
+    f.render_widget(Paragraph::new(sprite), body);
+
+    f.render_widget(
+        Paragraph::new("tunnel demo   ·   q / ESC quit")
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(theme.dim).add_modifier(Modifier::BOLD)),
+        foot,
+    );
 }
 
 async fn apply(effects: Vec<Effect>, greetd: &Channels) -> Option<Outcome> {

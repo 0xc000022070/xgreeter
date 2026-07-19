@@ -15,6 +15,8 @@ const DISCLAIMER_MAX_H: u16 = 8;
 pub struct Chrome<'a> {
     pub theme: &'a Theme,
     pub art: Option<&'a Text<'a>>,
+    /// When set, a procedural ASCII tunnel animates in place of `art`.
+    pub tunnel: bool,
     pub disclaimer: Option<&'a str>,
     pub show_help: bool,
 }
@@ -32,11 +34,21 @@ pub fn draw(f: &mut Frame, app: &AppState, logs: &LogBuffer, chrome: &Chrome) ->
     }
 
     // Default page: the whole area is the login stage; logs live behind F2.
-    if let Some(art) = chrome.art {
+    // The tunnel, when enabled, animates full-screen in place of the brand art.
+    if chrome.tunnel {
+        render_tunnel(f, area, app.tick, theme);
+    } else if let Some(art) = chrome.art {
         render_art(f, area, art, theme);
     }
     render_login(f, area, app, chrome);
     app.log_scroll
+}
+
+/// Procedural tunnel filling the whole stage as a background layer. The login
+/// panel is opaque and punches over its middle (the vanishing point).
+fn render_tunnel(f: &mut Frame, stage: Rect, tick: u64, theme: &Theme) {
+    let sprite = crate::tunnel::frame(tick, stage.width, stage.height, theme);
+    f.render_widget(Paragraph::new(sprite), stage);
 }
 
 /// User-supplied art, centered in the stage as a background layer. The login
@@ -96,7 +108,9 @@ fn render_login(f: &mut Frame, stage: Rect, app: &AppState, chrome: &Chrome) {
         y += 1;
         let (text, style) = status_line(app, theme, chrome.show_help);
         f.render_widget(
-            Paragraph::new(text).alignment(Alignment::Center).style(style),
+            Paragraph::new(text)
+                .alignment(Alignment::Center)
+                .style(style),
             row(y, 1),
         );
         y += 1;
@@ -157,14 +171,12 @@ fn render_bar(f: &mut Frame, bar: Rect, app: &AppState, theme: &Theme) {
         format!("LOGGING AS {}", app.user)
     };
     f.render_widget(
-        Paragraph::new(text)
-            .alignment(Alignment::Center)
-            .style(
-                Style::default()
-                    .bg(theme.accent)
-                    .fg(theme.on_accent)
-                    .add_modifier(Modifier::BOLD),
-            ),
+        Paragraph::new(text).alignment(Alignment::Center).style(
+            Style::default()
+                .bg(theme.accent)
+                .fg(theme.on_accent)
+                .add_modifier(Modifier::BOLD),
+        ),
         bar,
     );
 }
@@ -210,7 +222,9 @@ fn render_input(
 
 fn status_line(app: &AppState, theme: &Theme, show_help: bool) -> (String, Style) {
     let dim = Style::default().fg(theme.dim);
-    let err = Style::default().fg(theme.error).add_modifier(Modifier::BOLD);
+    let err = Style::default()
+        .fg(theme.error)
+        .add_modifier(Modifier::BOLD);
     let spin = SPINNER[(app.tick as usize / 2) % SPINNER.len()];
 
     match &app.phase {
@@ -322,6 +336,7 @@ mod tests {
         Chrome {
             theme,
             art: None,
+            tunnel: false,
             disclaimer,
             show_help,
         }
@@ -340,10 +355,11 @@ mod tests {
     ) -> String {
         use ratatui::{backend::TestBackend, Terminal};
         let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
-        terminal.draw(|f| {
-            draw(f, app, logs, chrome);
-        })
-        .unwrap();
+        terminal
+            .draw(|f| {
+                draw(f, app, logs, chrome);
+            })
+            .unwrap();
         terminal
             .backend()
             .buffer()
@@ -405,12 +421,18 @@ mod tests {
     fn help_can_be_hidden_while_idle_but_status_survives() {
         let theme = Theme::preset(Accent::Amber);
         let hidden = render_to_string(&app(), &chrome(&theme, None, false), 100, 30);
-        assert!(!hidden.contains("ENTER authenticate"), "help leaked when hidden");
+        assert!(
+            !hidden.contains("ENTER authenticate"),
+            "help leaked when hidden"
+        );
 
         let mut failing = app();
         failing.phase = Phase::Failed("access denied".into());
         let screen = render_to_string(&failing, &chrome(&theme, None, false), 100, 30);
-        assert!(screen.contains("ACCESS DENIED"), "status must show even with help off");
+        assert!(
+            screen.contains("ACCESS DENIED"),
+            "status must show even with help off"
+        );
     }
 
     #[test]

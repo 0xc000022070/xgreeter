@@ -22,6 +22,16 @@ pub struct Cli {
     /// Prefill the username field.
     #[arg(long)]
     pub user: Option<String>,
+
+    /// Disable the tunnel background (on by default) and fall back to the
+    /// configured brand art, if any.
+    #[arg(long)]
+    pub no_tunnel: bool,
+
+    /// Ignore login entirely and run the tunnel full-screen, looping. A
+    /// hands-off showcase — no greetd, no auth. ESC/q quits.
+    #[arg(long)]
+    pub tunnel_demo: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +46,9 @@ pub struct Config {
     pub art: Option<String>,
     pub disclaimer: Option<String>,
     pub show_help: bool,
+    /// Animated procedural tunnel background. On by default; when false the
+    /// configured `art` shows instead.
+    pub tunnel: bool,
 }
 
 impl Default for Config {
@@ -50,6 +63,7 @@ impl Default for Config {
             art: None,
             disclaimer: None,
             show_help: true,
+            tunnel: true,
         }
     }
 }
@@ -68,6 +82,7 @@ struct FileConfig {
     art_path: Option<PathBuf>,
     disclaimer: Option<String>,
     disclaimer_path: Option<PathBuf>,
+    tunnel: Option<bool>,
     #[serde(default)]
     colors: ColorsFile,
 }
@@ -100,6 +115,9 @@ impl Config {
         if let Some(u) = &cli.user {
             cfg.default_user = u.clone();
         }
+        if cli.no_tunnel {
+            cfg.tunnel = false;
+        }
 
         Ok(cfg)
     }
@@ -123,12 +141,19 @@ impl Config {
         if let Some(v) = file.show_help {
             self.show_help = v;
         }
+        if let Some(v) = file.tunnel {
+            self.tunnel = v;
+        }
 
         // Art / disclaimer: *_path (resolved relative to the config file) wins
         // over the inline string.
         self.art = load_text(file.art, file.art_path, cfg_path, "art")?;
-        self.disclaimer =
-            load_text(file.disclaimer, file.disclaimer_path, cfg_path, "disclaimer")?;
+        self.disclaimer = load_text(
+            file.disclaimer,
+            file.disclaimer_path,
+            cfg_path,
+            "disclaimer",
+        )?;
 
         self.overrides = parse_overrides(&file.colors)?;
         Ok(())
@@ -145,7 +170,10 @@ fn load_text(
         let resolved = if p.is_absolute() {
             p
         } else {
-            cfg_path.parent().unwrap_or(std::path::Path::new(".")).join(p)
+            cfg_path
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .join(p)
         };
         let text = std::fs::read_to_string(&resolved)
             .with_context(|| format!("reading {label} file {}", resolved.display()))?;

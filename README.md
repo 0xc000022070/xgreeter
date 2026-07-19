@@ -31,6 +31,24 @@ knobs: `session_cmd`, `default_user`, `idle_status`, `log_cmd`, `accent`
 Fonts aren't an app setting — a TUI draws with the console/VT font. On NixOS set
 `console.font` (pick one with box-drawing + block coverage, e.g. Terminus).
 
+## Tunnel
+
+The background is a procedural ASCII tunnel by default: a demoscene-style flight
+down a spiraling ring-and-spoke tunnel that zooms and rotates in real time. Every
+cell is a pure function of position and the frame clock — no frames to author,
+motion continuous by construction. It shades with the active theme (dim → accent)
+and fills the whole background; the login panel punches over the vanishing point.
+Background-only, never touches the auth path.
+
+Set `tunnel = false` (or pass `--no-tunnel`) to turn it off and show the
+configured `art`/`art_path` instead — the tunnel takes precedence while on.
+
+Run it full-screen, hands-off and looping, with no login:
+
+```sh
+xgreeter --tunnel-demo     # ESC/q to quit
+```
+
 ## Nix
 
 The flake exposes `packages.<system>.xgreeter`, an `overlays.default`, and a

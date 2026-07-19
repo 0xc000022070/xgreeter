@@ -36,6 +36,7 @@ self: {
       log_cmd = cfg.logCmd;
       accent = cfg.accent;
       show_help = cfg.showHelp;
+      tunnel = cfg.tunnel;
       art = cfg.art;
       art_path = cfg.artPath;
       disclaimer = cfg.disclaimer;
@@ -102,6 +103,16 @@ in {
       type = lib.types.nullOr lib.types.bool;
       default = null;
       description = "Show the idle key-hint line.";
+    };
+
+    tunnel = lib.mkOption {
+      type = lib.types.nullOr lib.types.bool;
+      default = null;
+      description = ''
+        Animated procedural ASCII tunnel behind the login box. On by default in
+        the greeter; set false to show the configured `art` instead. Overrides
+        `art` while enabled.
+      '';
     };
 
     art = lib.mkOption {

@@ -11,7 +11,10 @@ pub enum Phase {
     Idle,
     Creating,
     /// greetd asked something not pre-filled; caret is live in the field.
-    Prompt { secret: bool, message: String },
+    Prompt {
+        secret: bool,
+        message: String,
+    },
     Authenticating,
     Starting,
     Done,
@@ -269,7 +272,9 @@ impl AppState {
             AuthMessageType::Info | AuthMessageType::Error => {
                 // Not a prompt; acknowledge with an empty response to advance.
                 self.info = Some(message);
-                vec![Effect::Send(Request::PostAuthMessageResponse { response: None })]
+                vec![Effect::Send(Request::PostAuthMessageResponse {
+                    response: None,
+                })]
             }
         }
     }
@@ -544,7 +549,9 @@ mod tests {
         }));
         assert_eq!(
             e,
-            vec![Effect::Send(Request::PostAuthMessageResponse { response: None })]
+            vec![Effect::Send(Request::PostAuthMessageResponse {
+                response: None
+            })]
         );
         assert_eq!(a.info.as_deref(), Some("insert smartcard"));
     }

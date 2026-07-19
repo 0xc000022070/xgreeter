@@ -1,6 +1,10 @@
 # 0xc000022070's greeter config. Every key is optional; unset keys keep the
-# built-in defaults. Point the binary at it with `xgreeter --config PATH`.
+# built-in defaults. Auto-detected from ~/.config/xgreeter/config.toml or
+# /etc/xgreeter/config.toml; override with `xgreeter --config PATH`.
 # Relative *_path values resolve against this file's directory.
+#
+# The background is always a procedural ASCII animation (a spiraling tunnel);
+# it is permanent and has no config key. Preview it with `xgreeter --ascii-demo`.
 
 # argv (NOT a shell string) greetd execs as the session after auth succeeds.
 session_cmd = ["start-hyprland"]
@@ -20,21 +24,6 @@ log_cmd = ["journalctl", "-b", "-n", "40", "-f", "-o", "cat"]
 # failure messages always show regardless of this.
 show_help = true
 
-# Procedural ASCII tunnel behind the login box: a demoscene-style flight down a
-# spiraling ring tunnel, themed and looping. ON by default; while on, `art` below
-# is ignored. Set false (or pass --no-tunnel) to show `art` instead.
-# Preview it full-screen with `xgreeter --tunnel-demo` (no login, no greetd).
-tunnel = true
-
-# Background art behind the login box. Plain ASCII is tinted with colors.art;
-# raw ANSI escape codes (e.g. a fastfetch logo) keep their own colors.
-# Provide inline OR via file (art_path wins). Omit both for no art.
-# art = """
-#   your
-#   ascii
-# """
-# art_path = "logo.ans"
-
 # Optional blurb under the status bar (like a disclaimer). Inline or via file.
 # Omit for nothing.
 # disclaimer = "This system is a work of fiction. Any resemblance ... coincidental."
@@ -50,7 +39,6 @@ accent = "amber"
 # on_accent        = "#0a0a0a"   # text on the status bar
 # foreground       = "#e6e0d6"   # typed text
 # dim              = "#786e5c"   # hints, unfocused borders, footer, disclaimer
-# art              = "#302c24"   # tint for plain (non-ANSI) art
 # error            = "#ff5a3c"   # auth-failure text
 # background       = "#0a0a0c"   # canvas
 # field_background = "#18181c"   # input interiors

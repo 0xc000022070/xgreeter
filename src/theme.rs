@@ -17,7 +17,6 @@ pub struct Theme {
     pub on_accent: Color,
     pub fg: Color,
     pub dim: Color,
-    pub art: Color,
     pub error: Color,
     pub bg: Color,
     pub field_bg: Color,
@@ -29,7 +28,6 @@ pub struct Overrides {
     pub on_accent: Option<Color>,
     pub fg: Option<Color>,
     pub dim: Option<Color>,
-    pub art: Option<Color>,
     pub error: Option<Color>,
     pub bg: Option<Color>,
     pub field_bg: Option<Color>,
@@ -44,7 +42,6 @@ impl Theme {
                 on_accent: Color::Rgb(10, 10, 10),
                 fg: Color::Rgb(230, 224, 214),
                 dim: Color::Rgb(120, 110, 92),
-                art: Color::Rgb(48, 44, 36),
                 error: Color::Rgb(255, 90, 60),
                 bg,
                 field_bg: brighten(bg, 14),
@@ -54,7 +51,6 @@ impl Theme {
                 on_accent: Color::Rgb(235, 238, 255),
                 fg: Color::Rgb(225, 228, 240),
                 dim: Color::Rgb(96, 102, 130),
-                art: Color::Rgb(38, 40, 54),
                 error: Color::Rgb(255, 80, 80),
                 bg,
                 field_bg: brighten(bg, 14),
@@ -64,7 +60,6 @@ impl Theme {
                 on_accent: Color::Rgb(6, 16, 8),
                 fg: Color::Rgb(200, 240, 205),
                 dim: Color::Rgb(70, 120, 82),
-                art: Color::Rgb(24, 44, 30),
                 error: Color::Rgb(255, 90, 90),
                 bg,
                 field_bg: brighten(bg, 14),
@@ -74,7 +69,6 @@ impl Theme {
                 on_accent: Color::Rgb(12, 12, 12),
                 fg: Color::Rgb(220, 220, 220),
                 dim: Color::Rgb(110, 110, 110),
-                art: Color::Rgb(46, 46, 46),
                 error: Color::Rgb(230, 120, 120),
                 bg,
                 field_bg: brighten(bg, 14),
@@ -95,9 +89,6 @@ impl Theme {
         }
         if let Some(c) = o.dim {
             t.dim = c;
-        }
-        if let Some(c) = o.art {
-            t.art = c;
         }
         if let Some(c) = o.error {
             t.error = c;
@@ -122,16 +113,16 @@ pub fn parse_hex(s: &str) -> Result<Color, String> {
         return Err(format!("invalid hex color '{s}' (expected #rrggbb)"));
     }
     let n = u32::from_str_radix(h, 16).map_err(|e| e.to_string())?;
-    Ok(Color::Rgb(
-        (n >> 16) as u8,
-        (n >> 8) as u8,
-        n as u8,
-    ))
+    Ok(Color::Rgb((n >> 16) as u8, (n >> 8) as u8, n as u8))
 }
 
 fn brighten(c: Color, by: u8) -> Color {
     match c {
-        Color::Rgb(r, g, b) => Color::Rgb(r.saturating_add(by), g.saturating_add(by), b.saturating_add(by)),
+        Color::Rgb(r, g, b) => Color::Rgb(
+            r.saturating_add(by),
+            g.saturating_add(by),
+            b.saturating_add(by),
+        ),
         other => other,
     }
 }

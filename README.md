@@ -24,29 +24,29 @@ self-exits).
 
 Everything is config-driven; `xgreeter.example.toml` documents every key. The
 knobs: `session_cmd`, `default_user`, `idle_status`, `log_cmd`, `accent`
-(amber/blue/green/mono), per-color hex `[colors]`, `show_help`, `art`/`art_path`
-(ASCII or ANSI — a fastfetch/neofetch dump works, omit for none), and
+(amber/blue/green/mono), per-color hex `[colors]`, `show_help`, and
 `disclaimer`/`disclaimer_path`.
+
+With no `--config`, the greeter auto-detects its config from the first of
+`$XDG_CONFIG_HOME/xgreeter/config.toml` (or `~/.config/xgreeter/config.toml`)
+then `/etc/xgreeter/config.toml`. Pass `--config PATH` to override.
 
 Fonts aren't an app setting — a TUI draws with the console/VT font. On NixOS set
 `console.font` (pick one with box-drawing + block coverage, e.g. Terminus).
 
-## Tunnel
+## ASCII animation
 
-The background is a procedural ASCII tunnel by default: a demoscene-style flight
-down a spiraling ring-and-spoke tunnel that zooms and rotates in real time. Every
-cell is a pure function of position and the frame clock — no frames to author,
+The background is always a procedural ASCII animation — currently a demoscene-style
+flight down a spiraling ring-and-spoke tunnel that zooms and rotates in real time.
+Every cell is a pure function of position and the frame clock — no frames to author,
 motion continuous by construction. It shades with the active theme (dim → accent)
 and fills the whole background; the login panel punches over the vanishing point.
-Background-only, never touches the auth path.
-
-Set `tunnel = false` (or pass `--no-tunnel`) to turn it off and show the
-configured `art`/`art_path` instead — the tunnel takes precedence while on.
+It is permanent, background-only, and never touches the auth path.
 
 Run it full-screen, hands-off and looping, with no login:
 
 ```sh
-xgreeter --tunnel-demo     # ESC/q to quit
+xgreeter --ascii-demo     # ESC/q to quit
 ```
 
 ## Nix
@@ -71,13 +71,15 @@ programs.xgreeter = {
 };
 ```
 
-The module does **not** touch greetd — wiring the login path is your explicit,
+The module installs the generated config to `/etc/xgreeter/config.toml`, which the
+greeter auto-detects — so greetd execs the **bare binary**, no `--config` flag. The
+module does **not** touch greetd itself; wiring the login path is your explicit,
 boot-critical step. Do it only after `--demo` looks right, and keep the previous
 NixOS generation for one-click rollback:
 
 ```nix
 services.greetd.settings.default_session.command =
-  "${lib.getExe config.programs.xgreeter.package} --config ${config.programs.xgreeter.configFile}";
+  "${lib.getExe config.programs.xgreeter.package}";
 ```
 
 Before switching the display manager, dry-run on a spare VT (Ctrl-Alt-F3):

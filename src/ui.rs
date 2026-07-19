@@ -1,6 +1,6 @@
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span, Text};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
 use ratatui::Frame;
 
@@ -14,9 +14,6 @@ const DISCLAIMER_MAX_H: u16 = 8;
 
 pub struct Chrome<'a> {
     pub theme: &'a Theme,
-    pub art: Option<&'a Text<'a>>,
-    /// When set, a procedural ASCII tunnel animates in place of `art`.
-    pub tunnel: bool,
     pub disclaimer: Option<&'a str>,
     pub show_help: bool,
 }
@@ -33,34 +30,18 @@ pub fn draw(f: &mut Frame, app: &AppState, logs: &LogBuffer, chrome: &Chrome) ->
         return render_logs(f, area, logs, app, theme);
     }
 
-    // Default page: the whole area is the login stage; logs live behind F2.
-    // The tunnel, when enabled, animates full-screen in place of the brand art.
-    if chrome.tunnel {
-        render_tunnel(f, area, app.tick, theme);
-    } else if let Some(art) = chrome.art {
-        render_art(f, area, art, theme);
-    }
+    // Default page: the whole area is the login stage; logs live behind F2. The
+    // ascii animation always fills the background full-screen.
+    render_animation(f, area, app.tick, theme);
     render_login(f, area, app, chrome);
     app.log_scroll
 }
 
-/// Procedural tunnel filling the whole stage as a background layer. The login
-/// panel is opaque and punches over its middle (the vanishing point).
-fn render_tunnel(f: &mut Frame, stage: Rect, tick: u64, theme: &Theme) {
-    let sprite = crate::tunnel::frame(tick, stage.width, stage.height, theme);
+/// The procedural ascii animation filling the whole stage as a background layer.
+/// The login panel is opaque and punches over its middle (the vanishing point).
+fn render_animation(f: &mut Frame, stage: Rect, tick: u64, theme: &Theme) {
+    let sprite = crate::ascii_animation::frame(tick, stage.width, stage.height, theme);
     f.render_widget(Paragraph::new(sprite), stage);
-}
-
-/// User-supplied art, centered in the stage as a background layer. The login
-/// panel is opaque and punches over its middle, matching the reference look.
-fn render_art(f: &mut Frame, stage: Rect, art: &Text, theme: &Theme) {
-    let rect = centered(stage, stage.width, stage.height.saturating_sub(2));
-    f.render_widget(
-        Paragraph::new(art.clone())
-            .style(Style::default().fg(theme.art))
-            .alignment(Alignment::Center),
-        rect,
-    );
 }
 
 fn render_login(f: &mut Frame, stage: Rect, app: &AppState, chrome: &Chrome) {
@@ -83,7 +64,7 @@ fn render_login(f: &mut Frame, stage: Rect, app: &AppState, chrome: &Chrome) {
     }
     let area = centered(stage, width, height.min(stage.height));
 
-    // Opaque panel: wipe art beneath, repaint the canvas bg.
+    // Opaque panel: wipe the animation beneath, repaint the canvas bg.
     f.render_widget(Clear, area);
     f.render_widget(Block::default().style(Style::default().bg(theme.bg)), area);
 
@@ -335,8 +316,6 @@ mod tests {
     fn chrome<'a>(theme: &'a Theme, disclaimer: Option<&'a str>, show_help: bool) -> Chrome<'a> {
         Chrome {
             theme,
-            art: None,
-            tunnel: false,
             disclaimer,
             show_help,
         }

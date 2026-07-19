@@ -1,7 +1,7 @@
-//! Procedural ASCII tunnel: a demoscene-style "fly through a round tunnel"
-//! effect used as the animated login background. Every cell is a pure function
-//! of its position and `tick`, so there is no state and nothing to hand-author —
-//! the motion is continuous by construction.
+//! The permanent procedural ASCII animation drawn behind the login box. The
+//! current effect is a demoscene-style "fly through a round tunnel": every cell
+//! is a pure function of its position and `tick`, so there is no state and
+//! nothing to hand-author — the motion is continuous by construction.
 //!
 //! For each cell we take polar coordinates from the screen center, turn radius
 //! into a perspective `depth` (`k / r`), and read a shading value off a sine of

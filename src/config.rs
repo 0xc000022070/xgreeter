@@ -23,15 +23,10 @@ pub struct Cli {
     #[arg(long)]
     pub user: Option<String>,
 
-    /// Disable the tunnel background (on by default) and fall back to the
-    /// configured brand art, if any.
+    /// Ignore login entirely and run the ascii animation full-screen, looping.
+    /// A hands-off showcase — no greetd, no auth. ESC/q quits.
     #[arg(long)]
-    pub no_tunnel: bool,
-
-    /// Ignore login entirely and run the tunnel full-screen, looping. A
-    /// hands-off showcase — no greetd, no auth. ESC/q quits.
-    #[arg(long)]
-    pub tunnel_demo: bool,
+    pub ascii_demo: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -43,12 +38,8 @@ pub struct Config {
     pub log_cmd: Vec<String>,
     pub accent: Accent,
     pub overrides: Overrides,
-    pub art: Option<String>,
     pub disclaimer: Option<String>,
     pub show_help: bool,
-    /// Animated procedural tunnel background. On by default; when false the
-    /// configured `art` shows instead.
-    pub tunnel: bool,
 }
 
 impl Default for Config {
@@ -60,10 +51,8 @@ impl Default for Config {
             log_cmd: shell_words("journalctl -b -n 40 -f -o cat"),
             accent: Accent::Amber,
             overrides: Overrides::default(),
-            art: None,
             disclaimer: None,
             show_help: true,
-            tunnel: true,
         }
     }
 }
@@ -78,11 +67,8 @@ struct FileConfig {
     log_cmd: Option<Vec<String>>,
     accent: Option<Accent>,
     show_help: Option<bool>,
-    art: Option<String>,
-    art_path: Option<PathBuf>,
     disclaimer: Option<String>,
     disclaimer_path: Option<PathBuf>,
-    tunnel: Option<bool>,
     #[serde(default)]
     colors: ColorsFile,
 }
@@ -94,7 +80,6 @@ struct ColorsFile {
     on_accent: Option<String>,
     foreground: Option<String>,
     dim: Option<String>,
-    art: Option<String>,
     error: Option<String>,
     background: Option<String>,
     field_background: Option<String>,
@@ -104,19 +89,19 @@ impl Config {
     pub fn load(cli: &Cli) -> Result<Config> {
         let mut cfg = Config::default();
 
-        if let Some(path) = &cli.config {
-            let raw = std::fs::read_to_string(path)
+        // Explicit --config wins; otherwise the first well-known path that
+        // exists, so an unconfigured greetd unit can exec the bare binary.
+        // Neither present: the built-in defaults stand.
+        if let Some(path) = cli.config.clone().or_else(default_config_path) {
+            let raw = std::fs::read_to_string(&path)
                 .with_context(|| format!("reading config {}", path.display()))?;
             let file: FileConfig = toml::from_str(&raw)
                 .with_context(|| format!("parsing config {}", path.display()))?;
-            cfg.apply_file(file, path)?;
+            cfg.apply_file(file, &path)?;
         }
 
         if let Some(u) = &cli.user {
             cfg.default_user = u.clone();
-        }
-        if cli.no_tunnel {
-            cfg.tunnel = false;
         }
 
         Ok(cfg)
@@ -141,13 +126,9 @@ impl Config {
         if let Some(v) = file.show_help {
             self.show_help = v;
         }
-        if let Some(v) = file.tunnel {
-            self.tunnel = v;
-        }
 
-        // Art / disclaimer: *_path (resolved relative to the config file) wins
-        // over the inline string.
-        self.art = load_text(file.art, file.art_path, cfg_path, "art")?;
+        // disclaimer_path (resolved relative to the config file) wins over the
+        // inline string.
         self.disclaimer = load_text(
             file.disclaimer,
             file.disclaimer_path,
@@ -194,11 +175,24 @@ fn parse_overrides(c: &ColorsFile) -> Result<Overrides> {
         on_accent: f(&c.on_accent)?,
         fg: f(&c.foreground)?,
         dim: f(&c.dim)?,
-        art: f(&c.art)?,
         error: f(&c.error)?,
         bg: f(&c.background)?,
         field_bg: f(&c.field_background)?,
     })
+}
+
+/// Well-known config locations, checked in order. Returns the first that
+/// exists so an unconfigured greetd unit can exec the bare binary: a per-user
+/// file for terminal/`--demo` use, then the system path the NixOS module writes.
+fn default_config_path() -> Option<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(dir) = std::env::var_os("XDG_CONFIG_HOME") {
+        candidates.push(PathBuf::from(dir).join("xgreeter/config.toml"));
+    } else if let Some(home) = std::env::var_os("HOME") {
+        candidates.push(PathBuf::from(home).join(".config/xgreeter/config.toml"));
+    }
+    candidates.push(PathBuf::from("/etc/xgreeter/config.toml"));
+    candidates.into_iter().find(|p| p.is_file())
 }
 
 /// Minimal whitespace splitter for the built-in default only. Config files

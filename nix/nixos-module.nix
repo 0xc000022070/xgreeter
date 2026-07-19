@@ -22,7 +22,6 @@ self: {
     on_accent = cfg.colors.onAccent;
     foreground = cfg.colors.foreground;
     dim = cfg.colors.dim;
-    art = cfg.colors.art;
     error = cfg.colors.error;
     background = cfg.colors.background;
     field_background = cfg.colors.fieldBackground;
@@ -36,9 +35,6 @@ self: {
       log_cmd = cfg.logCmd;
       accent = cfg.accent;
       show_help = cfg.showHelp;
-      tunnel = cfg.tunnel;
-      art = cfg.art;
-      art_path = cfg.artPath;
       disclaimer = cfg.disclaimer;
       disclaimer_path = cfg.disclaimerPath;
     }
@@ -105,28 +101,6 @@ in {
       description = "Show the idle key-hint line.";
     };
 
-    tunnel = lib.mkOption {
-      type = lib.types.nullOr lib.types.bool;
-      default = null;
-      description = ''
-        Animated procedural ASCII tunnel behind the login box. On by default in
-        the greeter; set false to show the configured `art` instead. Overrides
-        `art` while enabled.
-      '';
-    };
-
-    art = lib.mkOption {
-      type = lib.types.nullOr lib.types.lines;
-      default = null;
-      description = "Inline background art (ASCII or ANSI). `artPath` wins over this.";
-    };
-
-    artPath = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default = null;
-      description = "Path to a file whose contents become the art.";
-    };
-
     disclaimer = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -144,7 +118,6 @@ in {
       onAccent = colorOpt "text on the status bar";
       foreground = colorOpt "typed text";
       dim = colorOpt "hints, unfocused borders, footer";
-      art = colorOpt "plain (non-ANSI) art tint";
       error = colorOpt "auth-failure text";
       background = colorOpt "canvas";
       fieldBackground = colorOpt "input interiors";
@@ -154,9 +127,11 @@ in {
       type = lib.types.path;
       readOnly = true;
       description = ''
-        The generated config, as a world-readable /nix/store path. Point greetd
-        at it, e.g. `services.greetd.settings.default_session.command =
-          "''${lib.getExe config.programs.xgreeter.package} --config ''${config.programs.xgreeter.configFile}"`.
+        The generated config, as a world-readable /nix/store path. Also installed
+        to `/etc/xgreeter/config.toml`, which the greeter auto-detects — so greetd
+        can exec the bare binary: `services.greetd.settings.default_session.command
+          = "''${lib.getExe config.programs.xgreeter.package}"`. Pass `--config` only
+        to override that auto-detected path.
       '';
     };
   };
@@ -164,6 +139,10 @@ in {
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [cfg.package];
     programs.xgreeter.configFile = toml.generate "greeter.toml" settings;
+
+    # The greeter auto-detects /etc/xgreeter/config.toml, so greetd needs no
+    # --config flag.
+    environment.etc."xgreeter/config.toml".source = cfg.configFile;
 
     users.users = lib.optionalAttrs (cfg.journalUser != null) {
       ${cfg.journalUser}.extraGroups = ["systemd-journal"];

@@ -1,21 +1,19 @@
 mod app;
+mod ascii_animation;
 mod config;
 mod greetd;
 mod logs;
 mod theme;
-mod tunnel;
 mod ui;
 
 use std::time::Duration;
 
-use ansi_to_tui::IntoText;
 use anyhow::Result;
 use clap::Parser;
 use futures::StreamExt;
 use ratatui::crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Alignment, Constraint, Layout};
 use ratatui::style::{Modifier, Style};
-use ratatui::text::Text;
 use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 
@@ -36,11 +34,11 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let cfg = Config::load(&cli)?;
 
-    // Standalone showcase: full-screen tunnel, no config auth, no greetd.
-    if cli.tunnel_demo {
+    // Standalone showcase: full-screen animation, no config auth, no greetd.
+    if cli.ascii_demo {
         let theme = Theme::resolve(cfg.accent, &cfg.overrides);
         let mut terminal = ratatui::init();
-        let result = tunnel_demo_loop(&mut terminal, &theme).await;
+        let result = ascii_demo_loop(&mut terminal, &theme).await;
         ratatui::restore();
         return result;
     }
@@ -65,7 +63,6 @@ async fn run(cli: &Cli, cfg: Config) -> Result<()> {
     };
 
     let theme = Theme::resolve(cfg.accent, &cfg.overrides);
-    let art = cfg.art.as_deref().map(parse_art);
     let app = AppState::new(
         cfg.idle_status.clone(),
         cfg.default_user.clone(),
@@ -76,8 +73,6 @@ async fn run(cli: &Cli, cfg: Config) -> Result<()> {
 
     let chrome = Chrome {
         theme: &theme,
-        art: art.as_ref(),
-        tunnel: cfg.tunnel,
         disclaimer: cfg.disclaimer.as_deref(),
         show_help: cfg.show_help,
     };
@@ -178,12 +173,6 @@ async fn event_loop<B: ratatui::backend::Backend>(
     }
 }
 
-// ANSI art keeps its own colors; plain art falls back to an untinted block the
-// UI colors with the theme's art color.
-fn parse_art(s: &str) -> Text<'static> {
-    s.into_text().unwrap_or_else(|_| Text::from(s.to_string()))
-}
-
 fn map_key(code: KeyCode, logs_open: bool) -> Option<Action> {
     // While the log viewer is up, keys drive scrolling; nothing reaches the
     // credential fields, so plain letters are safe as scroll/close shortcuts.
@@ -210,9 +199,9 @@ fn map_key(code: KeyCode, logs_open: bool) -> Option<Action> {
     }
 }
 
-/// Hands-off showcase: the tunnel animates full-screen forever with a caption.
-/// No greetd, no auth — a phone-friendly demo.
-async fn tunnel_demo_loop<B: ratatui::backend::Backend>(
+/// Hands-off showcase: the ascii animation runs full-screen forever with a
+/// caption. No greetd, no auth — a phone-friendly demo.
+async fn ascii_demo_loop<B: ratatui::backend::Backend>(
     terminal: &mut ratatui::Terminal<B>,
     theme: &Theme,
 ) -> Result<()> {
@@ -221,7 +210,7 @@ async fn tunnel_demo_loop<B: ratatui::backend::Backend>(
     let mut tick: u64 = 0;
 
     loop {
-        terminal.draw(|f| tunnel_demo_draw(f, tick, theme))?;
+        terminal.draw(|f| ascii_demo_draw(f, tick, theme))?;
 
         tokio::select! {
             _ = ticker.tick() => tick = tick.wrapping_add(1),
@@ -244,17 +233,17 @@ async fn tunnel_demo_loop<B: ratatui::backend::Backend>(
     }
 }
 
-fn tunnel_demo_draw(f: &mut Frame, tick: u64, theme: &Theme) {
+fn ascii_demo_draw(f: &mut Frame, tick: u64, theme: &Theme) {
     let area = f.area();
     f.render_widget(Block::default().style(Style::default().bg(theme.bg)), area);
 
     let [body, foot] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
 
-    let sprite = tunnel::frame(tick, body.width, body.height, theme);
+    let sprite = ascii_animation::frame(tick, body.width, body.height, theme);
     f.render_widget(Paragraph::new(sprite), body);
 
     f.render_widget(
-        Paragraph::new("tunnel demo   ·   q / ESC quit")
+        Paragraph::new("ascii demo   ·   q / ESC quit")
             .alignment(Alignment::Center)
             .style(Style::default().fg(theme.dim).add_modifier(Modifier::BOLD)),
         foot,
